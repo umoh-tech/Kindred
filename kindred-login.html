@@ -285,6 +285,23 @@
   }
   .error-banner.show{ display:block; }
 
+  .success-banner{
+    display:none;
+    background: #E9F7EF;
+    border: 1px solid #A9E0BD;
+    color: #1E6B3C;
+    font-size: 13px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+  }
+  .success-banner.show{ display:block; }
+
+  .btn-primary:disabled{
+    opacity: 0.6;
+    cursor: default;
+  }
+
   @media (prefers-reduced-motion: no-preference){
     .form-card{ animation: rise .45s ease both; }
   }
@@ -346,47 +363,64 @@
     <div class="form-card">
       <div class="mobile-mark">Kindred</div>
 
-      <h2>Log in</h2>
-      <p class="sub">Welcome back — enter your details to continue.</p>
+      <h2 id="formTitle">Log in</h2>
+      <p class="sub" id="formSub">Welcome back — enter your details to continue.</p>
 
-      <div class="error-banner" id="errorBanner">That email and password don't match. Try again.</div>
+      <div class="error-banner" id="errorBanner"></div>
+      <div class="success-banner" id="successBanner"></div>
 
-      <form id="loginForm" novalidate>
+      <form id="authForm" novalidate>
         <div class="field">
-          <label for="email">Email or username</label>
-          <input type="text" id="email" name="email" placeholder="you@example.com" autocomplete="username" required>
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" placeholder="you@example.com" autocomplete="username" required>
         </div>
 
         <div class="field">
           <label for="password">Password</label>
           <div class="pw-row">
-            <input type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required>
+            <input type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required minlength="6">
             <button type="button" class="pw-toggle" id="pwToggle" aria-label="Show password">Show</button>
           </div>
         </div>
 
-        <div class="row-between">
+        <div class="row-between" id="loginExtras">
           <label class="remember">
             <input type="checkbox" id="remember" name="remember">
             Keep me logged in
           </label>
-          <a href="#" class="forgot-link">Forgot password?</a>
+          <a href="#" class="forgot-link" id="forgotLink">Forgot password?</a>
         </div>
 
-        <button type="submit" class="btn btn-primary">Log in</button>
-
-        <div class="divider">or</div>
-
-        <button type="button" class="btn btn-secondary">Create new account</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Log in</button>
       </form>
 
-      <p class="signup-note">New to Kindred? <a href="#">Sign up — it's free.</a></p>
+      <p class="signup-note" id="switchNote">New to Kindred? <a href="#" id="switchLink">Sign up — it's free.</a></p>
     </div>
   </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
-  const pwInput = document.getElementById('password');
-  const pwToggle = document.getElementById('pwToggle');
+  // ---- 1. Configure your Supabase project here ----
+  const SUPABASE_URL = "https://janrrcyqwffbczhojaak.supabase.co";   // e.g. https://abcd1234.supabase.co
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphbnJyY3lxd2ZmYmN6aG9qYWFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzODU3NTksImV4cCI6MjEwNjk2MTc1OX0.NhYRx63s3FJjeB5_r2gAYLH4XnESwTVRxgbPUIJa6rY";  // Project Settings > API > anon public key
+
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // ---- 2. Element refs ----
+  const pwInput       = document.getElementById('password');
+  const pwToggle      = document.getElementById('pwToggle');
+  const form          = document.getElementById('authForm');
+  const errorBanner   = document.getElementById('errorBanner');
+  const successBanner = document.getElementById('successBanner');
+  const submitBtn     = document.getElementById('submitBtn');
+  const formTitle     = document.getElementById('formTitle');
+  const formSub       = document.getElementById('formSub');
+  const loginExtras   = document.getElementById('loginExtras');
+  const switchNote    = document.getElementById('switchNote');
+  const switchLink    = document.getElementById('switchLink');
+
+  let mode = 'login'; // or 'signup'
+
   pwToggle.addEventListener('click', () => {
     const isHidden = pwInput.type === 'password';
     pwInput.type = isHidden ? 'text' : 'password';
@@ -394,15 +428,92 @@
     pwToggle.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
   });
 
-  // Demo-only: this is a static mock, so submitting just shows the
-  // interface's error state rather than performing a real login.
-  const form = document.getElementById('loginForm');
-  const banner = document.getElementById('errorBanner');
-  form.addEventListener('submit', (e) => {
+  function showError(message){
+    successBanner.classList.remove('show');
+    errorBanner.textContent = message;
+    errorBanner.classList.add('show');
+  }
+
+  function showSuccess(message){
+    errorBanner.classList.remove('show');
+    successBanner.textContent = message;
+    successBanner.classList.add('show');
+  }
+
+  function clearBanners(){
+    errorBanner.classList.remove('show');
+    successBanner.classList.remove('show');
+  }
+
+  function setMode(next){
+    mode = next;
+    clearBanners();
+    if (mode === 'signup') {
+      formTitle.textContent = 'Create your account';
+      formSub.textContent = 'Join Kindred — it only takes a minute.';
+      submitBtn.textContent = 'Sign up';
+      loginExtras.style.display = 'none';
+      switchNote.innerHTML = 'Already on Kindred? <a href="#" id="switchLink">Log in</a>';
+    } else {
+      formTitle.textContent = 'Log in';
+      formSub.textContent = "Welcome back — enter your details to continue.";
+      submitBtn.textContent = 'Log in';
+      loginExtras.style.display = 'flex';
+      switchNote.innerHTML = 'New to Kindred? <a href="#" id="switchLink">Sign up — it\'s free.</a>';
+    }
+    // re-bind, since innerHTML replaced the link node
+    document.getElementById('switchLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      setMode(mode === 'login' ? 'signup' : 'login');
+    });
+  }
+
+  switchLink.addEventListener('click', (e) => {
     e.preventDefault();
-    banner.classList.add('show');
+    setMode(mode === 'login' ? 'signup' : 'login');
+  });
+
+  // ---- 3. Submit handler: real Supabase auth calls ----
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearBanners();
+
+    const email = document.getElementById('email').value.trim();
+    const password = pwInput.value;
+
+    if (!email || !password) {
+      showError('Enter both an email and a password.');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = mode === 'signup' ? 'Signing up…' : 'Logging in…';
+
+    try {
+      if (mode === 'signup') {
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        if (data.user && !data.session) {
+          showSuccess('Check your email to confirm your account.');
+        } else {
+          showSuccess('Account created — you\'re logged in.');
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        showSuccess('Logged in as ' + data.user.email + '.');
+        // Redirect to your app's home/feed page here, e.g.:
+        // window.location.href = '/home';
+      }
+    } catch (err) {
+      showError(err.message || 'Something went wrong. Try again.');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = mode === 'signup' ? 'Sign up' : 'Log in';
+    }
   });
 </script>
 
 </body>
-</html>
+          </html>
+
